@@ -48,21 +48,6 @@ latest_date_dt = dt.datetime.strptime(latest_date, "%Y-%m-%d")
 # Calculate the date 1 year ago from the latest data point in the database
 year_ago_latest_dt = latest_date_dt - dt.timedelta(days=365)
 
-#Perform a query to retrieve the date and precipitation over prior year from the latest date
-date_prcp_query = session.query(Measurement.date, Measurement.prcp).\
-    filter(Measurement.date<=latest_date_dt).filter(Measurement.date>year_ago_latest_dt)
-
-#Save the query results as a Pandas DataFrame and set the index to the date column
-date_prcp_df = pd.DataFrame(date_prcp_query, columns=['Date', 'Precipitation'])
-date_prcp_df.set_index('Date', inplace=True)
-
-#Drop NaN's and sort the dataframe by date
-date_prcp_df.dropna(inplace=True)
-date_prcp_df.sort_index(inplace=True)
-
-#Groupby date and take the max precipitaiton reading on that date.
-date_prcp_max = date_prcp_df.groupby('Date')[['Precipitation']].max()
-
 # What are the most active stations? (i.e. what stations have the most rows)?
 stat_freq = session.query(Measurement.station, func.count(Measurement.station)).group_by(Measurement.station).order_by(func.count(Measurement.station).desc()).all()
 max_stat_freq = stat_freq[0][0]
@@ -72,17 +57,10 @@ max_temp_max_stat = session.query(Measurement.station, func.max(Measurement.tobs
 min_temp_max_stat = session.query(Measurement.station, func.min(Measurement.tobs)).filter(Measurement.station==max_stat_freq).all()
 avg_temp_max_stat = session.query(Measurement.station, func.avg(Measurement.tobs)).filter(Measurement.station==max_stat_freq).all()
 
-# Query the last 12 months of temperature observation data for this station and plot the results as a histogram
-tobs_query = session.query(Measurement.tobs).\
-    filter(Measurement.date<=latest_date_dt).filter(Measurement.date>=year_ago_latest_dt).\
-    filter(Measurement.station==max_stat_freq)
-
-# Save the query results as a Pandas DataFrame
-tobs_df = pd.DataFrame(tobs_query, columns=['tobs'])
-tobs_df.dropna(inplace=True)
+session.close()
 
 #BEGIN FLASK APP
-from flask import Flask
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
@@ -93,8 +71,8 @@ def welcome():
         f"Welcome to Surf's Up weather API!<br/>"
         f"Available Routes:<br/>"
         f"/api/v1.0/precipitation<br/>"
+        f"/api/v1.0/temperature<br/>"
         f"/api/v1.0/stations<br/>"
-        f"/api/v1.0/tobs<br/>"
         f"/api/v1.0/<start><br/>"
         f"/api/v1.0/<start>/<end><br/>" 
     )
@@ -102,17 +80,45 @@ def welcome():
 @app.route("/api/v1.0/precipitation")
 def precipitation():
     print("Server received request for 'Precipitation' page...")
-    return "Welcome to the Precipitation page!"
+    session = Session(engine)
+    date_prcp_query = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.date<=latest_date_dt).filter(Measurement.date>year_ago_latest_dt)
+    session.close()
+
+    date_prcp_df = pd.DataFrame(date_prcp_query, columns=['Date', 'Precipitation'])
+    date_prcp_df.set_index('Date', inplace=True)
+    date_prcp_df.dropna(inplace=True)
+    date_prcp_df.sort_index(inplace=True)
+    date_prcp_max = date_prcp_df.groupby('Date')[['Precipitation']].max()
+    prcp_query_dict = date_prcp_max.to_dict()
+
+    return jsonify(prcp_query_dict)
 
 @app.route("/api/v1.0/stations")
 def stations():
     print("Server received request for 'Stations' page...")
-    return "Welcome to the Stations page!"
+    session = Session(engine)
+    station_names = session.query(Station.name).all()
+    session.close()
+    all_stats = list(np.ravel(station_names))
+    return jsonify(all_stats)
 
-@app.route("/api/v1.0/tobs")
+@app.route("/api/v1.0/temperature")
 def temperatures():
     print("Server received request for 'Temperatures' page...")
-    return "Welcome to the Temperatures page!"
+
+    session = Session(engine)
+    tobs_date_query = session.query(Measurement.date, Measurement.tobs).\
+    filter(Measurement.date<=latest_date_dt).filter(Measurement.date>=year_ago_latest_dt).\
+    filter(Measurement.station==max_stat_freq)
+    session.close()
+
+    tobs_date_df = pd.DataFrame(tobs_date_query, columns=['Date','Temperature'])
+    tobs_date_df.set_index('Date', inplace=True)
+    tobs_date_df.dropna(inplace=True)
+    tobs_date_dict = tobs_date_df.to_dict()
+
+    return jsonify(tobs_date_dict)
 
 @app.route("/api/v1.0/<start>")
 def temp_start():
