@@ -47,15 +47,11 @@ latest_date_dt = dt.datetime.strptime(latest_date, "%Y-%m-%d")
 
 # Calculate the date 1 year ago from the latest data point in the database
 year_ago_latest_dt = latest_date_dt - dt.timedelta(days=365)
+year_ago_latest = dt.datetime.strftime(year_ago_latest_dt, "%Y-%m-%d")
 
 # What are the most active stations? (i.e. what stations have the most rows)?
 stat_freq = session.query(Measurement.station, func.count(Measurement.station)).group_by(Measurement.station).order_by(func.count(Measurement.station).desc()).all()
 max_stat_freq = stat_freq[0][0]
-
-# highest temp recorded, and average temp of the most active station?
-max_temp_max_stat = session.query(Measurement.station, func.max(Measurement.tobs)).filter(Measurement.station==max_stat_freq).all()
-min_temp_max_stat = session.query(Measurement.station, func.min(Measurement.tobs)).filter(Measurement.station==max_stat_freq).all()
-avg_temp_max_stat = session.query(Measurement.station, func.avg(Measurement.tobs)).filter(Measurement.station==max_stat_freq).all()
 
 session.close()
 
@@ -68,16 +64,27 @@ app = Flask(__name__)
 def welcome():
     print("Server received request for 'Home' page...")
     return (
-        f"Welcome to Surf's Up weather API!<br/>"
-        f"Available Routes:<br/>"
-        f"/api/v1.0/precipitation<br/>"
-        f"/api/v1.0/temperature<br/>"
-        f"/api/v1.0/stations<br/>"
-        f"/api/v1.0/<start><br/>"
-        f"/api/v1.0/<start>/<end><br/>" 
+        f"Welcome to Surf's Up weather API!<br>"
+        f"<br>"
+        f"Earliest date of data = {earliest_date}<br>"
+        f"Latest date of data = {latest_date}<br>"
+        f"<br>"
+        f"Available Routes:<br>"
+        f"<br>"
+        f"Below URL returns JSON of precipitation on Oahu on each day between {year_ago_latest} and {latest_date}.<br>"
+        f"/api/v1.0/precipitation<br><br>"
+        f"Below URL returns JSON of temperature on Oahu on each day between {year_ago_latest} and {latest_date}.<br>"
+        f"/api/v1.0/temperature<br><br>"
+        f"Below URL returns JSON of the weather stations on Oahu.<br>"
+        f"/api/v1.0/stations<br><br>"
+        f"Below URL returns the max, min, and avg temperature on Oahu between the START and END dates provided by the user in the URL.<br>"
+        f"START and END dates in the URL must be entered in the form YYYY-MM-DD.<br>"
+        f"If no END date provided in the URL then END date is assume to be {latest_date}<br>"
+        f"/api/v1.0/START/END"
     )
 
-@app.route("/api/v1.0/precipitation")
+
+@app.route("/api/v1.0/precipitation/")
 def precipitation():
     print("Server received request for 'Precipitation' page...")
     session = Session(engine)
@@ -94,7 +101,7 @@ def precipitation():
 
     return jsonify(prcp_query_dict)
 
-@app.route("/api/v1.0/stations")
+@app.route("/api/v1.0/stations/")
 def stations():
     print("Server received request for 'Stations' page...")
     session = Session(engine)
@@ -103,7 +110,7 @@ def stations():
     all_stats = list(np.ravel(station_names))
     return jsonify(all_stats)
 
-@app.route("/api/v1.0/temperature")
+@app.route("/api/v1.0/temperature/")
 def temperatures():
     print("Server received request for 'Temperatures' page...")
 
@@ -120,15 +127,52 @@ def temperatures():
 
     return jsonify(tobs_date_dict)
 
-@app.route("/api/v1.0/<start>")
-def temp_start():
-    print("Server received request for 'Min, Max, Avg Start' page...")
-    return "Welcome to the Min, Max, Avg Start Date page!"
-
-@app.route("/api/v1.0/<start>/<end>")
-def temp_start_end():
+@app.route("/api/v1.0/<start>/")
+def temp_start(start):
     print("Server received request for 'Min, Max, Avg Start End' page...")
-    return "Welcome to the Min, Max, Avg Start End Date page!"
+    session = Session(engine)
+    TMAX = session.query(func.max(Measurement.tobs)).\
+        filter(Measurement.date<=latest_date).filter(Measurement.date>=start).all()
+    TMIN = session.query(func.min(Measurement.tobs)).\
+        filter(Measurement.date<=latest_date).filter(Measurement.date>=start).all()
+    TAVG = session.query(func.avg(Measurement.tobs)).\
+        filter(Measurement.date<=latest_date).filter(Measurement.date>=start).all()
+    session.close()
+
+    TAVG = round(TAVG[0][0],1)
+
+    days_obs = latest_date_dt - dt.datetime.strptime(start, "%Y-%m-%d")
+    days_obs = days_obs.days
+
+    return  (
+            f"The maximum temperature on Oahu for the {days_obs} days between {start} and {latest_date} was {TMAX[0][0]}.<br>"
+            f"The minimum temperature on Oahu for the {days_obs} days between {start} and {latest_date} was {TMIN[0][0]}.<br>"
+            f"The average temperature on Oahu for the {days_obs} days between {start} and {latest_date} was {TAVG}.<br>"
+    )
+
+@app.route("/api/v1.0/<start>/<end>/")
+def temp_start_end(start, end):
+    print("Server received request for 'Min, Max, Avg Start End' page...")
+    session = Session(engine)
+    TMAX = session.query(func.max(Measurement.tobs)).\
+        filter(Measurement.date<=end).filter(Measurement.date>=start).all()
+    TMIN = session.query(func.min(Measurement.tobs)).\
+        filter(Measurement.date<=end).filter(Measurement.date>=start).all()
+    TAVG = session.query(func.avg(Measurement.tobs)).\
+        filter(Measurement.date<=end).filter(Measurement.date>=start).all()
+    session.close()
+
+    TAVG = round(TAVG[0][0],1)
+
+    days_obs = dt.datetime.strptime(end, "%Y-%m-%d") - dt.datetime.strptime(start, "%Y-%m-%d")
+    days_obs = days_obs.days
+
+    return  (
+            f"The maximum temperature on Oahu for the {days_obs} days between {start} and {end} was {TMAX[0][0]}.<br>"
+            f"The minimum temperature on Oahu for the {days_obs} days between {start} and {end} was {TMIN[0][0]}.<br>"
+            f"The average temperature on Oahu for the {days_obs} days between {start} and {end} was {TAVG}.<br>"
+    )
+
 
 if __name__ == "__main__":
     app.run(debug=True)
