@@ -70,14 +70,18 @@ def welcome():
         f"Latest date of data = {latest_date}<br><br>"
         f"Available URL Routes:<br><br>"
         f"Below URL returns JSON of precipitation on Oahu on each day between {year_ago_latest} and {latest_date}.<br>"
-        f"Copy this URL to browser: /api/v1.0/precipitation<br><br>"
-        f"Below URL returns JSON of temperature on Oahu on each day between {year_ago_latest} and {latest_date}.<br>"
-        f"Copy this URL to browser: /api/v1.0/temperature<br><br>"
+        f"Copy this URL to browser:<br>" 
+        f"/api/v1.0/precipitation<br><br>"
+        f"Below URL returns JSON of temperature at station {max_stat_freq} on Oahu on each day between {year_ago_latest} and {latest_date}.<br>"
+        f"Copy this URL to browser:<br>" 
+        f"/api/v1.0/temperature<br><br>"
         f"Below URL returns JSON of the weather stations on Oahu.<br>"
-        f"Copy this URL to browser: /api/v1.0/stations<br><br>"
+        f"Copy this URL to browser:<br>" 
+        f"/api/v1.0/stations<br><br>"
         f"Below URL returns the max, min, and avg temperature on Oahu encompassing the START and END dates provided by the user in the URL.<br>"
         f"If no END date provided in the URL then END date is assume to be {latest_date}<br>"
-        f"Copy this URL to browser and replace START/END with dates in YYYY-MM-DD format: /api/v1.0/START/END"
+        f"Copy this URL to browser and replace START/END with dates in YYYY-MM-DD format:<br>" 
+        f"/api/v1.0/START/END"
     )
 
 
